@@ -1,6 +1,9 @@
 package oauth
 
-import "github.com/DecxBase/core/types"
+import (
+	"github.com/DecxBase/core/types"
+	"github.com/DecxBase/core/utils"
+)
 
 type OAuthRequestType int
 
@@ -18,17 +21,37 @@ type OAuthRequestResult struct {
 	Data any
 }
 
-type OAuthResult struct {
-	AccessToken string
-	IDToken     string
-	ExpiresIn   int
-	TokenType   string
-	Scopes      []string
+type OAuthToken struct {
+	AccessToken string `json:"access_token"`
+	IDToken     string `json:"id_token"`
+	ExpiresIn   int64  `json:"expires_in"`
+	TokenType   string `json:"token_type"`
 }
+
+type OAuthUser struct {
+	UserID       string
+	IdentityType string
+	Identity     string
+	AccessToken  string
+	ExpiresIn    int64
+}
+
+type OAuthConfig interface {
+	ClientID() string
+	ClientSecret() string
+	GetExtra(string) any
+}
+
+type OAuthRawCallback = func(*oAuthURI) *oAuthURI
 
 type OAuthServiceProvider interface {
 	Name() string
-	Initialize(*oAuthOptions, ...string) (*OAuthRequestResult, error)
-	Callback(*oAuthOptions) (*OAuthResult, error)
+	FieldMappings() utils.DataMap[string]
 	Validate(types.JSONStringData) error
+	Initialize(*oAuthOptions, ...string) (*OAuthRequestResult, error)
+	Callback(*oAuthOptions) (*OAuthToken, error)
+	RefreshToken(string) (*OAuthToken, error)
+	TokenToUser(*OAuthToken) (*OAuthUser, error)
+	Get(string, []string, *oAuthOptions) (types.JSONDumpData, error)
+	Call(OAuthRawCallback, *oAuthRequestOptions) (types.JSONDumpData, error)
 }

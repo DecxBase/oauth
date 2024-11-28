@@ -15,6 +15,24 @@ type oAuthURI struct {
 	uri url.URL
 }
 
+func (u *oAuthURI) SetSchema(schema string) *oAuthURI {
+	u.Schema = schema
+
+	return u
+}
+
+func (u *oAuthURI) SetHost(host string) *oAuthURI {
+	u.Host = host
+
+	return u
+}
+
+func (u *oAuthURI) SetPath(path string) *oAuthURI {
+	u.Path = path
+
+	return u
+}
+
 func (u *oAuthURI) SetIf(valid bool, key string, val string) *oAuthURI {
 	if valid {
 		return u.Set(key, val)
@@ -73,7 +91,7 @@ func (u oAuthURI) Clone() *oAuthURI {
 		Host:   u.Host,
 		Path:   u.Path,
 		Query:  u.Query,
-		Body:   u.Body,
+		Body:   make(map[string]any),
 	}
 }
 
@@ -87,6 +105,16 @@ func URI(host string, path string) *oAuthURI {
 		Schema: "https",
 		Host:   host,
 		Path:   path,
+		Query:  make(map[string]string),
+		Body:   make(map[string]any),
+	}
+}
+
+func URIHost(host string) *oAuthURI {
+	return &oAuthURI{
+		Schema: "https",
+		Host:   host,
+		Path:   "",
 		Query:  make(map[string]string),
 		Body:   make(map[string]any),
 	}

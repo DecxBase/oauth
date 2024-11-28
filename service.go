@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/DecxBase/core/types"
+	"github.com/DecxBase/core/utils"
 )
 
 type OAuthService[T comparable] struct {
@@ -51,7 +52,7 @@ func (s OAuthService[T]) Initialize(name T, scopes []string, cbs ...OAuthOptionC
 	return result, nil
 }
 
-func (s OAuthService[T]) Callback(name T, data types.JSONStringData, cbs ...OAuthOptionCallback) (*OAuthResult, error) {
+func (s OAuthService[T]) Callback(name T, data types.JSONStringData, cbs ...OAuthOptionCallback) (*OAuthToken, error) {
 	service, err := s.GetProvider(name)
 	if err != nil {
 		return nil, err
@@ -63,6 +64,85 @@ func (s OAuthService[T]) Callback(name T, data types.JSONStringData, cbs ...OAut
 	}
 
 	result, err := service.Callback(Options(s.makeOptionCallbacks(cbs)...))
+	if err != nil {
+		return nil, err
+	}
+
+	return result, nil
+}
+
+func (s OAuthService[T]) RefreshToken(name T, token string) (*OAuthToken, error) {
+	service, err := s.GetProvider(name)
+	if err != nil {
+		return nil, err
+	}
+
+	result, err := service.RefreshToken(token)
+	if err != nil {
+		return nil, err
+	}
+
+	return result, nil
+}
+
+func (s OAuthService[T]) TokenToUser(name T, token *OAuthToken) (*OAuthUser, error) {
+	service, err := s.GetProvider(name)
+	if err != nil {
+		return nil, err
+	}
+
+	result, err := service.TokenToUser(token)
+	if err != nil {
+		return nil, err
+	}
+
+	return result, nil
+}
+
+func (s OAuthService[T]) Get(name T, token string, fields []string, opts *oAuthOptions) (types.JSONDumpData, error) {
+	if len(fields) < 1 {
+		return make(types.JSONDumpData), nil
+	}
+
+	service, err := s.GetProvider(name)
+	if err != nil {
+		return nil, err
+	}
+
+	mapped := utils.NewDataMap[string]()
+	mappings := service.FieldMappings()
+	theFields := utils.MapData(utils.MakeDataList(fields), func(field string) string {
+		if mappings.Contains(field) {
+			return mapped.Set(mappings.Get(field), field)
+		}
+
+		return field
+	})
+
+	result, err := service.Get(token, theFields, opts)
+	if err != nil {
+		return nil, err
+	}
+
+	newResult := make(types.JSONDumpData)
+	for key, val := range result {
+		if mapped.Contains(key) {
+			newResult[mapped.Get(key)] = val
+		} else {
+			newResult[key] = val
+		}
+	}
+
+	return newResult, nil
+}
+
+func (s OAuthService[T]) GetRaw(name T, token string, fields []string, opts *oAuthOptions) (types.JSONDumpData, error) {
+	service, err := s.GetProvider(name)
+	if err != nil {
+		return nil, err
+	}
+
+	result, err := service.Get(token, fields, opts)
 	if err != nil {
 		return nil, err
 	}

@@ -46,3 +46,24 @@ func OAuthErrorAccessDenied() OAuthError {
 		Message: "Permission denied",
 	}
 }
+
+func OAuthErrorJWTFailed() OAuthError {
+	return OAuthError{
+		Reason:  "jwt_token",
+		Message: "Failed to parse JWT token",
+	}
+}
+
+func OAuthErrorDecodeFailed() OAuthError {
+	return OAuthError{
+		Reason:  "decode",
+		Message: "Failed to decode data",
+	}
+}
+
+func OAuthErrorUnimplemented(name string, method string) OAuthError {
+	return OAuthError{
+		Reason:  "unimplemented",
+		Message: fmt.Sprintf("Service [%s] hasn't implmented method [%s]", name, method),
+	}
+}

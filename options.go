@@ -1,9 +1,10 @@
 package oauth
 
 type oAuthOptions struct {
-	Redirect string
-	AuthType string
-	Config   map[string]any
+	Redirect    string
+	AuthType    string
+	RequestPath string
+	Config      map[string]any
 }
 
 func (o oAuthOptions) GetConfig(key string) any {
@@ -13,7 +14,9 @@ func (o oAuthOptions) GetConfig(key string) any {
 type OAuthOptionCallback = func(*oAuthOptions)
 
 func Options(cbs ...OAuthOptionCallback) *oAuthOptions {
-	opts := &oAuthOptions{}
+	opts := &oAuthOptions{
+		Config: make(map[string]any),
+	}
 
 	for _, cb := range cbs {
 		cb(opts)
@@ -26,6 +29,7 @@ func WithOptions(opts *oAuthOptions) OAuthOptionCallback {
 	return func(o *oAuthOptions) {
 		o.Redirect = opts.Redirect
 		o.AuthType = opts.AuthType
+		o.RequestPath = opts.RequestPath
 		o.Config = opts.Config
 	}
 }
@@ -42,12 +46,14 @@ func WithOptAuthType(auth_type string) OAuthOptionCallback {
 	}
 }
 
+func WithOptRequestPath(req_path string) OAuthOptionCallback {
+	return func(o *oAuthOptions) {
+		o.RequestPath = req_path
+	}
+}
+
 func WithOptConfig(key string, val any) OAuthOptionCallback {
 	return func(o *oAuthOptions) {
-		if o.Config == nil {
-			o.Config = make(map[string]any)
-		}
-
 		o.Config[key] = val
 	}
 }

@@ -1,7 +1,7 @@
 package oauth
 
 import (
-	"encoding/json"
+	"fmt"
 	"strings"
 
 	"github.com/DecxBase/core/types"
@@ -9,11 +9,18 @@ import (
 )
 
 type facebookOAuthProvider struct {
-	config *oAuthConfig
+	*OAuthProviderBase
+	version string
 }
 
 func (p facebookOAuthProvider) Name() string {
 	return "facebook"
+}
+
+func (p facebookOAuthProvider) FieldMappings() utils.DataMap[string] {
+	return utils.MakeDataMap(map[string]string{
+		"full_name": "name",
+	})
 }
 
 func (p facebookOAuthProvider) Initialize(opts *oAuthOptions, scopes ...string) (*OAuthRequestResult, error) {
@@ -25,8 +32,9 @@ func (p facebookOAuthProvider) Initialize(opts *oAuthOptions, scopes ...string) 
 		"email",
 	)
 
-	uri := URI("www.facebook.com", "v21.0/dialog/oauth").
-		Set("client_id", p.config.ClientID).
+	uri := p.client.Clone().SetHost("www.facebook.com").
+		SetPath(fmt.Sprintf("%s/dialog/oauth", p.version)).
+		Set("client_id", p.config.ClientID()).
 		Set("response_type", "code").
 		SetIf(len(opts.AuthType) > 0, "auth_type", opts.AuthType).
 		SetIf(len(rScopes) > 0, "scope", strings.Join(rScopes, ",")).
@@ -38,48 +46,70 @@ func (p facebookOAuthProvider) Initialize(opts *oAuthOptions, scopes ...string) 
 	}, nil
 }
 
-func (p facebookOAuthProvider) Callback(opts *oAuthOptions) (*OAuthResult, error) {
-	uri := URI("graph.facebook.com", "v21.0/oauth/access_token").
-		Set("client_id", p.config.ClientID).
-		Set("client_secret", p.config.ClientSecret).
-		Set("code", opts.GetConfig("code").(string)).
-		Set("redirect_uri", opts.Redirect)
+func (p facebookOAuthProvider) Callback(opts *oAuthOptions) (*OAuthToken, error) {
+	data, err := p.RunTokenRequest(func(uri *oAuthURI) *oAuthURI {
+		return uri.SetPath(fmt.Sprintf("%s/oauth/access_token", p.version)).
+			Set("client_id", p.config.ClientID()).
+			Set("client_secret", p.config.ClientSecret()).
+			Set("code", opts.GetConfig("code").(string)).
+			Set("redirect_uri", opts.Redirect)
+	}, RequestOptions(), "access_token")
 
-	res, err := OAuthRequest(*uri, RequestOptions())
+	if err != nil {
+		return nil, err
+	}
+	return p.MakeTokenResult(data)
+}
+
+func (p facebookOAuthProvider) RefreshToken(token string) (*OAuthToken, error) {
+	data, err := p.RunTokenRequest(func(uri *oAuthURI) *oAuthURI {
+		return uri.SetPath(fmt.Sprintf("%s/oauth/access_token", p.version)).
+			Set("client_id", p.config.ClientID()).
+			Set("client_secret", p.config.ClientSecret()).
+			Set("grant_type", "fb_exchange_token").
+			Set("fb_exchange_token", token)
+	}, RequestOptions(), "access_token")
+
+	if err != nil {
+		return nil, err
+	}
+	return p.MakeTokenResult(data)
+}
+
+func (p facebookOAuthProvider) TokenToUser(token *OAuthToken) (*OAuthUser, error) {
+	fields, err := p.Get(token.AccessToken, []string{"id", "email"}, Options())
 	if err != nil {
 		return nil, err
 	}
 
-	var data types.JSONStringData
-	json.Unmarshal(res, &data)
-
-	access_token := data["access_token"]
-	if len(access_token) < 1 {
-		return nil, OAuthErrorToken()
-	}
-
-	return &OAuthResult{
-		AccessToken: access_token,
-		TokenType:   data["token_type"],
-		ExpiresIn:   utils.StringToInt(data["expires_in"]),
+	return &OAuthUser{
+		UserID:       fields["id"].(string),
+		IdentityType: "email",
+		Identity:     fields["email"].(string),
+		AccessToken:  token.AccessToken,
+		ExpiresIn:    token.ExpiresIn,
 	}, nil
 }
 
-func (p facebookOAuthProvider) Validate(data types.JSONStringData) error {
-	error_code := data["error_code"]
-	if len(error_code) > 0 {
-		return OAuthError{
-			Code:    error_code,
-			Reason:  data["error_reason"],
-			Message: data["error_description"],
-		}
+func (p facebookOAuthProvider) Get(token string, fields []string, opts *oAuthOptions) (types.JSONDumpData, error) {
+	path := "me"
+	if len(opts.RequestPath) > 0 {
+		path = opts.RequestPath
 	}
 
-	return nil
+	return p.Call(func(uri *oAuthURI) *oAuthURI {
+		return uri.SetPath(path).
+			Set("access_token", token).
+			Set("fields", strings.Join(fields, ","))
+	}, RequestOptions())
 }
 
-func OAuthFacebook(config *oAuthConfig) *facebookOAuthProvider {
+func FacebookOAuth(config OAuthConfig) *facebookOAuthProvider {
 	return &facebookOAuthProvider{
-		config: config,
+		version: "v21.0",
+		OAuthProviderBase: &OAuthProviderBase{
+			config: config,
+			client: URIHost("graph.facebook.com"),
+		},
 	}
 }

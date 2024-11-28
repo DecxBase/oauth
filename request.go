@@ -5,18 +5,22 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+
+	"github.com/DecxBase/core/types"
 )
 
 type oAuthRequestOptions struct {
-	Method string
-	Body   io.Reader
+	Method  string
+	Body    io.Reader
+	Headers types.JSONStringData
 }
 
 type OAuthRequestOptionCallback = func(*oAuthRequestOptions)
 
 func RequestOptions(cbs ...OAuthRequestOptionCallback) *oAuthRequestOptions {
 	opts := &oAuthRequestOptions{
-		Method: http.MethodGet,
+		Method:  http.MethodGet,
+		Headers: make(types.JSONStringData),
 	}
 
 	for _, cb := range cbs {
@@ -38,8 +42,23 @@ func WithReqOptBody(body io.Reader) OAuthRequestOptionCallback {
 	}
 }
 
-func OAuthRequest(uri oAuthURI, opts *oAuthRequestOptions) ([]byte, error) {
+func WithReqHeader(key string, value string) OAuthRequestOptionCallback {
+	return func(o *oAuthRequestOptions) {
+		o.Headers[key] = value
+	}
+}
+
+func OAuthRequestURI(uri *oAuthURI) ([]byte, error) {
+	return OAuthRequest(uri, RequestOptions())
+}
+
+func OAuthRequest(uri *oAuthURI, opts *oAuthRequestOptions) ([]byte, error) {
 	req, err := http.NewRequest(opts.Method, uri.String(), opts.Body)
+	if len(opts.Headers) > 0 {
+		for hkey, hval := range opts.Headers {
+			req.Header.Set(hkey, hval)
+		}
+	}
 
 	if err != nil {
 		return nil, fmt.Errorf("client: could not create request: %s", err)
@@ -60,7 +79,7 @@ func OAuthRequest(uri oAuthURI, opts *oAuthRequestOptions) ([]byte, error) {
 	return resBody, nil
 }
 
-func OAuthRequestJSON(uri oAuthURI, opts *oAuthRequestOptions) (map[string]any, error) {
+func OAuthRequestJSON(uri *oAuthURI, opts *oAuthRequestOptions) (map[string]any, error) {
 	res, err := OAuthRequest(uri, opts)
 
 	if err != nil {
